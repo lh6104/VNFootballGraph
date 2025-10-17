@@ -66,27 +66,32 @@ Export:
 ```
 VNFootballGraph/
 │
-├── src/
-│ ├── 01_download_articles.py # Thu thập dữ liệu từ Wikipedia
-│ ├── 02_expand_graph.ipynb # Notebook mở rộng mạng và tạo đồ thị
-│ ├── 03_matrix_export.ipynb # Xuất ma trận kề và phân tích
-│ └── utils/ # Các hàm hỗ trợ
+├── README.md                      # Tài liệu mô tả ý tưởng, cách chạy và kết quả
 │
-├── data/
-│ ├── seed_nodes.json # Danh sách node khởi đầu (hạt giống)
-│ ├── auto_expanded_nodes.csv # Node thu được
-│ ├── auto_expanded_edges.csv # Các cạnh trong đồ thị
-│ └── graph_exports/
-│ ├── VNFootballGraph.gexf
-│ ├── VNFootballGraph.graphml
-│ ├── VNFootballGraph.json
-│ └── matrix/
-│ ├── adjacency_matrix.csv
-│ ├── adjacency_matrix.xlsx
-│ └── adjacency_matrix.npy
+├── data/                          # Thư mục chứa dữ liệu đầu vào / trung gian
 │
-├── README.md
-└── requirements.txt
+├── src/                           # Mã nguồn chính
+│   ├── data/
+│   │   ├── graph_exports/         # Kết quả xuất từ đồ thị (Graph formats)
+│   │   │   ├── matrix/            # Các file ma trận kề (Adjacency Matrix)
+│   │   │   │   ├── adjacency_matrix.csv
+│   │   │   │   ├── adjacency_matrix.xlsx
+│   │   │   │   └── adjacency_matrix.npy
+│   │   │   ├── VNFootballGraph.gexf
+│   │   │   ├── VNFootballGraph.graphml
+│   │   │   ├── VNFootballGraph.json
+│   │   │   ├── VNFootballGraph.pkl
+│   │   │   ├── auto_expanded_nodes.csv
+│   │   │   ├── auto_expanded_edges.csv
+│   │   │   └── categories.json
+│   │
+│   ├── lib/                       # Thư mục chứa các hàm tiện ích (nếu có)
+│   │
+│   ├── VNFootballGraph.ipynb      # Notebook chính: Crawl + mở rộng mạng + xuất file
+│   └── matrix.ipynb               # Notebook sinh ma trận kề và phân tích đồ thị
+│
+└── requirements.txt               # Danh sách thư viện cần cài đặt
+
 
 ```
 

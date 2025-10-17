@@ -1,0 +1,34 @@
+# ====================================================
+# VNFootballGraph - Requirements File
+# Tạo mạng tri thức Wikipedia về bóng đá Việt Nam
+# ====================================================
+
+# Core Python Libraries
+pandas==2.2.2
+numpy==1.26.4
+tqdm==4.66.4
+
+# Wikipedia API & Parsing
+wikipedia-api==0.6.0
+mwparserfromhell==0.6.6
+requests==2.32.3
+
+# Graph & Network Analysis
+networkx==3.3
+pyvis==0.3.2
+
+# Visualization
+matplotlib==3.8.4
+seaborn==0.13.2
+
+# Jupyter / Notebook Environment
+ipykernel==6.29.5
+jupyter==1.0.0
+notebook==7.2.1
+
+# Optional: Excel export & compatibility
+openpyxl==3.1.5
+xlrd==2.0.1
+
+# JSON & Data Serialization
+jsonschema==4.22.0

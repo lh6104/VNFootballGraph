@@ -1,0 +1,48 @@
+{
+  "players": [
+    "Cầu thủ bóng đá Việt Nam",
+    "Cầu thủ bóng đá nam Việt Nam",
+    "Cầu thủ bóng đá Việt Nam ở nước ngoài",
+    "Cầu thủ bóng đá sinh năm 1990",
+    "Cầu thủ bóng đá sinh năm 1991",
+    "Cầu thủ bóng đá sinh năm 1992",
+    "Cầu thủ bóng đá sinh năm 1993",
+    "Cầu thủ bóng đá sinh năm 1994",
+    "Cầu thủ bóng đá sinh năm 1995",
+    "Cầu thủ bóng đá sinh năm 1996",
+    "Cầu thủ bóng đá sinh năm 1997",
+    "Cầu thủ bóng đá sinh năm 1998",
+    "Cầu thủ bóng đá sinh năm 1999",
+    "Cầu thủ bóng đá sinh năm 2000",
+    "Cầu thủ bóng đá sinh năm 2001",
+    "Cầu thủ bóng đá sinh năm 2002",
+    "Cầu thủ bóng đá sinh năm 2003",
+    "Cầu thủ bóng đá sinh năm 2004",
+    "Cầu thủ bóng đá sinh năm 2005"
+  ],
+  "female_players": [
+    "Cầu thủ bóng đá nữ Việt Nam",
+    "Cầu thủ đội tuyển bóng đá nữ Việt Nam"
+  ],
+  "coaches": [
+    "Huấn luyện viên bóng đá Việt Nam",
+    "Huấn luyện viên bóng đá nữ Việt Nam",
+    "Trợ lý huấn luyện viên bóng đá Việt Nam"
+  ],
+  "clubs": [
+    "Câu lạc bộ bóng đá tại Việt Nam",
+    "Câu lạc bộ bóng đá Việt Nam theo tỉnh thành",
+    "Câu lạc bộ bóng đá nữ Việt Nam"
+  ],
+  "national_teams": [
+    "Đội tuyển bóng đá Việt Nam",
+    "Đội tuyển bóng đá nữ Việt Nam",
+    "Đội tuyển bóng đá U23 Việt Nam",
+    "Đội tuyển bóng đá U20 Việt Nam"
+  ],
+  "overseas": [
+    "Cầu thủ bóng đá người Việt Nam ở nước ngoài",
+    "Cầu thủ bóng đá nhập tịch tại Việt Nam",
+    "Cầu thủ bóng đá gốc Việt Nam"
+  ]
+}

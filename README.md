@@ -1,4 +1,4 @@
-# ⚽ Vietnamese Football Knowledge Graph
+# Vietnamese Football Knowledge Graph
 
 > A Python-based web crawler that builds a comprehensive knowledge graph of Vietnamese football by extracting structured data from Vietnamese Wikipedia.
 
@@ -8,7 +8,7 @@
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Overview](#-overview)
 - [Features](#-features)
@@ -26,7 +26,7 @@
 
 ---
 
-## 🎯 Overview
+## Overview
 
 This project crawls Vietnamese Wikipedia to extract information about football players, coaches, clubs, and national teams, then constructs a knowledge graph showing their relationships. The output is a structured JSON file containing nodes (entities) and edges (relationships) that can be used for analysis and visualization.
 
@@ -40,26 +40,26 @@ This project crawls Vietnamese Wikipedia to extract information about football p
 
 ---
 
-## ✨ Features
+## Features
 
 ### Core Functionality
-- 🕷️ **Intelligent Crawling**: Depth-limited BFS crawling with visited page tracking
-- 🇻🇳 **Vietnamese Language Support**: Handles Vietnamese field names and date formats
-- 🔍 **Entity Recognition**: Automatically identifies players, coaches, clubs, and national teams
-- 🔗 **Relationship Extraction**: Extracts PLAYED_FOR, COACHED, TRAINED_UNDER, MEMBER_OF relationships
-- 📊 **JSON Output**: Clean, structured output with full graph information
+- **Intelligent Crawling**: Depth-limited BFS crawling with visited page tracking
+- **Vietnamese Language Support**: Handles Vietnamese field names and date formats
+- **Entity Recognition**: Automatically identifies players, coaches, clubs, and national teams
+- **Relationship Extraction**: Extracts PLAYED_FOR, COACHED, TRAINED_UNDER, MEMBER_OF relationships
+- **JSON Output**: Clean, structured output with full graph information
 
 ### Advanced Features
-- 💾 **Auto-Checkpoint**: Saves progress every 5 pages, resume from where you left off
-- ⌨️ **Graceful Ctrl+C**: Press Ctrl+C anytime to save and exit safely
-- 📝 **Detailed Logging**: Automatic logging to timestamped files in `logs/` folder
-- 🎛️ **Configurable**: Easy-to-customize field mappings and entity keywords
-- 🚫 **Rate Limiting**: Respects Wikipedia's rate limits (1 second delay between requests)
+- **Auto-Checkpoint**: Saves progress every 5 pages, resume from where you left off
+- **Graceful Ctrl+C**: Press Ctrl+C anytime to save and exit safely
+- **Detailed Logging**: Automatic logging to timestamped files in `logs/` folder
+- **Configurable**: Easy-to-customize field mappings and entity keywords
+- **Rate Limiting**: Respects Wikipedia's rate limits (1 second delay between requests)
 
 
 ---
 
-## 🔧 Installation
+## Installation
 
 ### Prerequisites
 
@@ -172,7 +172,7 @@ python -m src.main --depth 2
 
 ---
 
-## 📊 Output Format
+## Output Format
 
 ### JSON Structure
 
@@ -235,7 +235,7 @@ The output file `data/vn_football_graph.json` contains:
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 ### Field Mappings
 
@@ -287,7 +287,7 @@ python -m src.main
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 VNFootballGraph/
@@ -313,7 +313,7 @@ VNFootballGraph/
 
 ---
 
-## 🎓 Advanced Features
+## Advanced Features
 
 ### Checkpoint System
 
@@ -372,7 +372,7 @@ The crawler respects Wikipedia's rate limits:
 
 ---
 
-## 💡 Examples
+## Examples
 
 ### Example 1: Quick Test
 
@@ -481,7 +481,7 @@ print("Exported to nodes.csv and edges.csv")
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Issue: `ModuleNotFoundError`
 
@@ -521,7 +521,7 @@ python -m src.main --depth 1
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Here are some ways you can contribute:
 
@@ -545,13 +545,13 @@ Contributions are welcome! Here are some ways you can contribute:
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Built on top of the [Kapok](https://github.com/aaasen/kapok) Wikipedia graph project
 - Uses [Vietnamese Wikipedia](https://vi.wikipedia.org) as data source
@@ -559,15 +559,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 📞 Contact
+## Contact
 
 For questions, issues, or suggestions, please [open an issue](https://github.com/yourusername/VNFootballGraph/issues) on GitHub.
 
 ---
 
-## 📈 Project Status
+## Project Status
 
-**Current Status:** ✅ Active and ready to use
+**Current Status:** Active and ready to use
 
 **Last Updated:** October 2025
 
@@ -579,7 +579,7 @@ For questions, issues, or suggestions, please [open an issue](https://github.com
 
 <div align="center">
 
-**⚽ Built with ❤️ for Vietnamese Football Analytics**
+**Built for Vietnamese Football Analytics**
 
 [Report Bug](https://github.com/yourusername/VNFootballGraph/issues) · [Request Feature](https://github.com/yourusername/VNFootballGraph/issues)
 

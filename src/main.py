@@ -56,7 +56,7 @@ def setup_logging():
     root_logger.addHandler(file_handler)
     
     # Log the log file location
-    root_logger.info(f"📝 Log file: {log_file}")
+    root_logger.info(f"Log file: {log_file}")
     
     return log_file
 
@@ -106,10 +106,10 @@ class VNFootballGraphBuilder:
     
     def _signal_handler(self, signum, frame):
         """Handle Ctrl+C gracefully."""
-        logger.warning("\n⚠️  Interrupt received! Saving checkpoint...")
+        logger.warning("\nInterrupt received! Saving checkpoint...")
         self.interrupted = True
         self._save_checkpoint()
-        logger.info("✅ Checkpoint saved. You can resume later.")
+        logger.info("Checkpoint saved. You can resume later.")
         sys.exit(0)
     
     def _load_checkpoint(self):
@@ -124,7 +124,7 @@ class VNFootballGraphBuilder:
                 self.relationships = checkpoint.get('relationships', [])
                 self.crawler.visited = set(checkpoint.get('visited', []))
                 
-                logger.info(f"📂 Loaded checkpoint: {len(self.entities)} entities, {len(self.relationships)} relationships")
+                logger.info(f"Loaded checkpoint: {len(self.entities)} entities, {len(self.relationships)} relationships")
                 logger.info(f"   Already visited: {len(self.crawler.visited)} pages")
             except Exception as e:
                 logger.warning(f"Failed to load checkpoint: {e}")
@@ -150,7 +150,7 @@ class VNFootballGraphBuilder:
             with open(checkpoint_path, 'w', encoding='utf-8') as f:
                 json.dump(checkpoint, f, ensure_ascii=False, indent=2)
             
-            logger.debug(f"💾 Checkpoint saved: {len(self.entities)} entities")
+            logger.debug(f"Checkpoint saved: {len(self.entities)} entities")
         except Exception as e:
             logger.error(f"Failed to save checkpoint: {e}")
     
@@ -371,13 +371,13 @@ class VNFootballGraphBuilder:
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(output_data, f, ensure_ascii=False, indent=2)
         
-        logger.info(f"✅ JSON output saved to: {output_file}")
+        logger.info(f"JSON output saved to: {output_file}")
         
         # Clean up checkpoint file after successful completion
         checkpoint_path = Path(self.checkpoint_file)
         if checkpoint_path.exists():
             checkpoint_path.unlink()
-            logger.info("🗑️  Checkpoint file removed (crawl completed)")
+            logger.info("Checkpoint file removed (crawl completed)")
     
     def close(self):
         """Clean up resources."""

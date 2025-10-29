@@ -259,15 +259,15 @@ class InfoboxParser:
         
         return None
     
-    def extract_relationships(self, infobox_data: Dict) -> Dict[str, List[str]]:
+    def extract_relationships(self, infobox_data: Dict) -> Dict:
         """
-        Extract relationship information from parsed infobox data.
+        Extract relationship data from parsed infobox including career history.
         
         Args:
-            infobox_data: Parsed infobox dictionary
+            infobox_data: Parsed infobox data dictionary
             
         Returns:
-            Dictionary mapping relationship types to entity names
+            Dictionary with relationship lists
         """
         relationships = {
             'clubs': [],
@@ -275,26 +275,58 @@ class InfoboxParser:
             'national_teams': [],
         }
         
-        # Extract clubs
-        if 'current_club' in infobox_data:
-            relationships['clubs'].append(infobox_data['current_club'])
-        
-        if 'club' in infobox_data:
-            clubs = infobox_data['club'].split(',')
-            relationships['clubs'].extend([c.strip() for c in clubs])
+        # Extract clubs from specific fields
+        club_fields = ['current_club', 'club', 'clubs', 'đội_hiện_nay']
+        for field in club_fields:
+            if field in infobox_data:
+                value = infobox_data[field]
+                if value:
+                    relationships['clubs'].append(value)
         
         # Extract coaches
-        if 'coach' in infobox_data:
-            coaches = infobox_data['coach'].split(',')
-            relationships['coaches'].extend([c.strip() for c in coaches])
+        coach_fields = ['manager', 'coach', 'head_coach', 'huấn_luyện_viên']
+        for field in coach_fields:
+            if field in infobox_data:
+                value = infobox_data[field]
+                if value:
+                    relationships['coaches'].append(value)
         
         # Extract national teams
-        if 'national_team' in infobox_data:
-            teams = infobox_data['national_team'].split(',')
-            relationships['national_teams'].extend([t.strip() for t in teams])
+        team_fields = ['national_team', 'đội_tuyển']
+        for field in team_fields:
+            if field in infobox_data:
+                value = infobox_data[field]
+                if value:
+                    relationships['national_teams'].append(value)
+        
+        # Extract career history (year ranges)
+        for key, value in infobox_data.items():
+            # Check if key looks like a year range
+            if self._is_year_range(key) and value:
+                # Determine if it's a club or national team
+                value_lower = str(value).lower()
+                if any(kw in value_lower for kw in ['u-23', 'u-20', 'u-17', 'đội tuyển', 'việt nam']):
+                    relationships['national_teams'].append(value)
+                else:
+                    relationships['clubs'].append(value)
         
         # Remove duplicates
         for key in relationships:
             relationships[key] = list(set(relationships[key]))
         
         return relationships
+    
+    def _is_year_range(self, text: str) -> bool:
+        """
+        Check if text looks like a year range (e.g., '2014-2022', '2007–2011').
+        
+        Args:
+            text: Text to check
+            
+        Returns:
+            True if looks like year range
+        """
+        import re
+        # Match patterns like: 2014-2022, 2007–2011, 2020–
+        pattern = r'\d{4}[–-]\d{0,4}'
+        return bool(re.search(pattern, str(text)))

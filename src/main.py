@@ -8,6 +8,8 @@ import json
 import logging
 import sys
 import signal
+import psutil
+import os
 from typing import Dict, List
 from pathlib import Path
 from datetime import datetime
@@ -122,7 +124,16 @@ class VNFootballGraphBuilder:
                 
                 self.entities = checkpoint.get('entities', [])
                 self.relationships = checkpoint.get('relationships', [])
-                self.crawler.visited = set(checkpoint.get('visited', []))
+                visited = checkpoint.get('visited', [])
+                page_tree = checkpoint.get('page_tree', {})
+                
+                # Validate checkpoint: if no entities but has visited pages, it's corrupted
+                if len(visited) > 0 and len(self.entities) == 0:
+                    logger.warning(f"Checkpoint appears corrupted ({len(visited)} visited pages but 0 entities). Ignoring checkpoint.")
+                    return
+                
+                self.crawler.visited = set(visited)
+                self.crawler.page_tree = page_tree
                 
                 logger.info(f"Loaded checkpoint: {len(self.entities)} entities, {len(self.relationships)} relationships")
                 logger.info(f"   Already visited: {len(self.crawler.visited)} pages")
@@ -139,6 +150,7 @@ class VNFootballGraphBuilder:
                 'entities': self.entities,
                 'relationships': self.relationships,
                 'visited': list(self.crawler.visited),
+                'page_tree': self.crawler.page_tree,
                 'metadata': {
                     'max_depth': self.max_depth,
                     'total_entities': len(self.entities),
@@ -154,6 +166,39 @@ class VNFootballGraphBuilder:
         except Exception as e:
             logger.error(f"Failed to save checkpoint: {e}")
     
+    def _log_memory_usage(self):
+        """Log current memory usage."""
+        try:
+            process = psutil.Process(os.getpid())
+            mem_info = process.memory_info()
+            mem_mb = mem_info.rss / 1024 / 1024
+            logger.info(f"Memory usage: {mem_mb:.1f} MB")
+        except Exception as e:
+            logger.debug(f"Could not get memory info: {e}")
+    
+    def _check_memory_limit(self, limit_mb: int = 8192) -> bool:
+        """
+        Check if memory usage exceeds limit.
+        
+        Args:
+            limit_mb: Memory limit in MB (default: 8GB)
+            
+        Returns:
+            True if limit exceeded
+        """
+        try:
+            process = psutil.Process(os.getpid())
+            mem_info = process.memory_info()
+            mem_mb = mem_info.rss / 1024 / 1024
+            
+            if mem_mb > limit_mb:
+                logger.warning(f"Memory usage ({mem_mb:.1f} MB) exceeds limit ({limit_mb} MB)")
+                return True
+            return False
+        except Exception as e:
+            logger.debug(f"Could not check memory limit: {e}")
+            return False
+    
     def build(self, seed_page: str):
         """
         Build graph from seed page.
@@ -164,19 +209,29 @@ class VNFootballGraphBuilder:
         logger.info(f"Starting graph build from: {seed_page}")
         logger.info(f"Max depth: {self.max_depth}, Output mode: {self.output_mode}")
         
-        # Step 1: Crawl pages
+        # Step 1 & 2: Crawl and parse pages (streaming)
         logger.info("=" * 60)
-        logger.info("STEP 1: Crawling Wikipedia pages")
+        logger.info("STEP 1 & 2: Crawling and parsing Wikipedia pages (streaming)")
         logger.info("=" * 60)
-        pages_data = self.crawler.crawl(seed_page)
-        logger.info(f"Crawled {len(pages_data)} pages")
         
-        # Step 2: Parse infoboxes
-        logger.info("=" * 60)
-        logger.info("STEP 2: Parsing infoboxes")
-        logger.info("=" * 60)
-        self._parse_pages(pages_data)
-        logger.info(f"Parsed {len(self.entities)} entities")
+        # Process pages as they are yielded (memory efficient)
+        page_count = 0
+        for page_data in self.crawler.crawl(seed_page):
+            page_count += 1
+            self._parse_page(page_data)
+            
+            # Monitor memory and save checkpoint every 10 pages
+            if page_count % 10 == 0:
+                self._save_checkpoint()
+                self._log_memory_usage()
+            
+            # Safety check: stop if memory usage is too high
+            if page_count % 50 == 0:
+                if self._check_memory_limit():
+                    logger.warning("Memory limit reached! Stopping crawl.")
+                    break
+        
+        logger.info(f"Processed {page_count} pages, extracted {len(self.entities)} entities")
         
         # Step 3: Build graph
         logger.info("=" * 60)
@@ -194,40 +249,43 @@ class VNFootballGraphBuilder:
         logger.info("Graph build complete!")
         logger.info("=" * 60)
     
-    def _parse_pages(self, pages_data: List[Dict]):
-        """Parse pages and extract entities."""
-        for idx, page_data in enumerate(pages_data, 1):
-            title = page_data['title']
-            logger.info(f"Parsing: {title} ({idx}/{len(pages_data)})")
-            
-            # Determine entity type
-            entity_type = self.crawler.get_page_type(page_data)
-            
-            if not entity_type:
-                logger.debug(f"Could not determine type for: {title}")
-                continue
-            
-            # Parse infobox
-            infobox = page_data.get('infobox')
-            infobox_data = self.parser.parse(infobox)
-            
-            # Create entity
-            entity = {
-                'name': title,
-                'type': entity_type,
-                'url': page_data['url'],
-                'properties': infobox_data,
-                'categories': page_data.get('categories', []),
-            }
-            
-            self.entities.append(entity)
-            
-            # Extract relationships
-            self._extract_relationships(entity, infobox, infobox_data)
-            
-            # Save checkpoint every 5 pages
-            if idx % 5 == 0:
-                self._save_checkpoint()
+    def _parse_page(self, page_data: Dict):
+        """Parse a single page and extract entity."""
+        title = page_data['title']
+        logger.debug(f"Parsing: {title}")
+        
+        # Determine entity type
+        entity_type = self.crawler.get_page_type(page_data)
+        
+        if not entity_type:
+            logger.debug(f"Could not determine type for: {title}")
+            return
+        
+        # Parse infobox
+        infobox = page_data.get('infobox')
+        infobox_data = self.parser.parse(infobox)
+        
+        # Check if player is Vietnamese diaspora/naturalized
+        is_diaspora = False
+        if entity_type == 'player':
+            is_diaspora = self.crawler.is_vietnamese_diaspora(page_data)
+            if is_diaspora:
+                logger.info(f"  → {title}: Vietnamese diaspora/naturalized player")
+                infobox_data['is_vietnamese_diaspora'] = True
+        
+        # Create entity
+        entity = {
+            'name': title,
+            'type': entity_type,
+            'url': page_data['url'],
+            'properties': infobox_data,
+            'categories': page_data.get('categories', []),
+        }
+        
+        self.entities.append(entity)
+        
+        # Extract relationships
+        self._extract_relationships(entity, infobox, infobox_data)
     
     def _extract_relationships(self, entity: Dict, infobox, infobox_data: Dict):
         """Extract relationships from entity data."""
@@ -351,6 +409,13 @@ class VNFootballGraphBuilder:
     
     def _output_json(self):
         """Output results to JSON file."""
+        # Calculate statistics
+        total_players = sum(1 for e in self.entities if e['type'] == 'player')
+        diaspora_players = sum(
+            1 for e in self.entities 
+            if e['type'] == 'player' and e['properties'].get('is_vietnamese_diaspora', False)
+        )
+        
         output_data = {
             'entities': self.entities,
             'relationships': self.relationships,
@@ -359,6 +424,8 @@ class VNFootballGraphBuilder:
                 'total_entities': len(self.entities),
                 'total_relationships': len(self.relationships),
                 'pages_visited': len(self.crawler.visited),
+                'total_players': total_players,
+                'vietnamese_diaspora_players': diaspora_players,
             }
         }
         
@@ -372,6 +439,8 @@ class VNFootballGraphBuilder:
             json.dump(output_data, f, ensure_ascii=False, indent=2)
         
         logger.info(f"JSON output saved to: {output_file}")
+        logger.info(f"  Total players: {total_players}")
+        logger.info(f"  Vietnamese diaspora/naturalized players: {diaspora_players}")
         
         # Clean up checkpoint file after successful completion
         checkpoint_path = Path(self.checkpoint_file)

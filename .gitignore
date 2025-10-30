@@ -150,6 +150,12 @@ PROJECT_SUMMARY.txt
 *.bak
 run_crawl_single_seed.sh.bak
 
+# Documentation files (temporary)
+scripts/*SUMMARY.txt
+scripts/*RECOMMENDATION.txt
+scripts/*GUIDE.txt
+scripts/README_*.txt
+
 # Ignore all markdown files except README
 *.md
 !README.md

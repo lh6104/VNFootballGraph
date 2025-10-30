@@ -1,12 +1,13 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+# C extensions
 *.so
+
+# Distribution / packaging
 .Python
-env/
-venv/
-ENV/
 build/
 develop-eggs/
 dist/
@@ -19,13 +20,82 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Virtual environments
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
 .env
 .venv
 env/
@@ -34,16 +104,59 @@ ENV/
 env.bak/
 venv.bak/
 
-# Data and logs
-data/
-logs/
-*.json
-*.csv
-*.log
+# Spyder project settings
+.spyderproject
+.spyproject
 
-# But keep sample/example files
-!example.py
-!FILE_STRUCTURE.txt
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Project specific - Data & Logs
+data/checkpoint.json
+data/*.json
+data/test.json
+logs/
+test_logs/
+*.html
+*.pkl
+*.csv
+
+# Temporary test files
+quick_test.py
+test_quick.sh
+test_multi_seed.sh
+test_enhanced_crawl.py
+view_test_results.sh
+run_tests.sh
+example.py
+scripts/test_person_detection.py
+scripts/enhanced_keywords_snippet.py
+scripts/check_nationality.py
+data/temp_multi_seed/
+output/
+PERFORMANCE_NOTES.txt
+PROJECT_SUMMARY.txt
+*.bak
+run_crawl_single_seed.sh.bak
+
+# Ignore all markdown files except README
+*.md
+!README.md
+!LICENSE.md
+
+# Usage guide (keep)
+!README_USAGE.txt
 
 # IDE
 .vscode/
@@ -51,53 +164,3 @@ logs/
 *.swp
 *.swo
 *~
-.project
-.pydevproject
-.settings/
-
-# OS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-Desktop.ini
-
-# Neo4j
-.neo4j/
-neo4j/
-
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-.nox/
-
-# Documentation builds
-docs/_build/
-site/
-
-# Temporary files
-*.tmp
-*.bak
-*.swp
-*~.nib
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Keep directory structure but ignore contents
-!data/.gitkeep
-!logs/.gitkeep
-
-# Ignore all markdown files except README
-*.md
-!README.md
-!LICENSE.md

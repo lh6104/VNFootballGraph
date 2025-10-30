@@ -8,6 +8,7 @@ import json
 import logging
 import sys
 import signal
+import atexit
 import psutil
 import os
 from typing import Dict, List
@@ -102,17 +103,31 @@ class VNFootballGraphBuilder:
         
         # Setup signal handler for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+        
+        # Register atexit handler to save checkpoint on any exit
+        atexit.register(self._save_checkpoint_on_exit)
         
         # Load checkpoint if exists
         self._load_checkpoint()
     
     def _signal_handler(self, signum, frame):
         """Handle Ctrl+C gracefully."""
-        logger.warning("\nInterrupt received! Saving checkpoint...")
+        logger.warning("\n" + "="*60)
+        logger.warning("⚠️  INTERRUPT RECEIVED! Saving checkpoint...")
+        logger.warning("="*60)
         self.interrupted = True
-        self._save_checkpoint()
-        logger.info("Checkpoint saved. You can resume later.")
+        self._save_checkpoint(force=True)
+        logger.info(f"✅ Checkpoint saved: {len(self.entities)} entities, {len(self.relationships)} relationships")
+        logger.info(f"📁 File: {self.checkpoint_file}")
+        logger.info("💡 Run again to resume from checkpoint.")
         sys.exit(0)
+    
+    def _save_checkpoint_on_exit(self):
+        """Save checkpoint on any exit (atexit handler)."""
+        if not self.interrupted and len(self.entities) > 0:
+            logger.info("Saving final checkpoint before exit...")
+            self._save_checkpoint(force=True)
     
     def _load_checkpoint(self):
         """Load checkpoint if exists."""
@@ -140,8 +155,12 @@ class VNFootballGraphBuilder:
             except Exception as e:
                 logger.warning(f"Failed to load checkpoint: {e}")
     
-    def _save_checkpoint(self):
+    def _save_checkpoint(self, force=False):
         """Save current progress to checkpoint file."""
+        # Only save if we have entities or force=True
+        if not force and len(self.entities) == 0:
+            return
+            
         try:
             checkpoint_path = Path(self.checkpoint_file)
             checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -162,7 +181,10 @@ class VNFootballGraphBuilder:
             with open(checkpoint_path, 'w', encoding='utf-8') as f:
                 json.dump(checkpoint, f, ensure_ascii=False, indent=2)
             
-            logger.debug(f"Checkpoint saved: {len(self.entities)} entities")
+            if force:
+                logger.info(f"💾 Checkpoint saved: {len(self.entities)} entities, {len(self.relationships)} relationships")
+            else:
+                logger.debug(f"Checkpoint saved: {len(self.entities)} entities")
         except Exception as e:
             logger.error(f"Failed to save checkpoint: {e}")
     
@@ -220,8 +242,8 @@ class VNFootballGraphBuilder:
             page_count += 1
             self._parse_page(page_data)
             
-            # Monitor memory and save checkpoint every 10 pages
-            if page_count % 10 == 0:
+            # Monitor memory and save checkpoint every 5 pages (more frequent)
+            if page_count % 5 == 0:
                 self._save_checkpoint()
                 self._log_memory_usage()
             
@@ -273,6 +295,41 @@ class VNFootballGraphBuilder:
                 logger.info(f"  → {title}: Vietnamese diaspora/naturalized player")
                 infobox_data['is_vietnamese_diaspora'] = True
         
+        # Extract nationality if not present
+        if not infobox_data.get('nationality'):
+            from .nationality_extractor import extract_nationality
+            nationality = extract_nationality(
+                properties=infobox_data,
+                categories=page_data.get('categories', []),
+                text=page_data.get('first_paragraph', '')
+            )
+            if nationality:
+                infobox_data['nationality'] = nationality
+                logger.debug(f"  → {title}: Extracted nationality = {nationality}")
+        
+        # Extract career status for players (active vs retired)
+        if entity_type == 'player':
+            career_status = self._extract_career_status(page_data)
+            if career_status != 'unknown':
+                infobox_data['career_status'] = career_status
+                logger.debug(f"  → {title}: Career status = {career_status}")
+            
+            # Extract retirement year if retired
+            if career_status == 'retired':
+                retirement_year = self._extract_retirement_year(page_data)
+                if retirement_year:
+                    infobox_data['retirement_year'] = retirement_year
+                    logger.debug(f"  → {title}: Retired in {retirement_year}")
+        
+        # Extract gender for players and coaches
+        if entity_type in ['player', 'coach']:
+            gender = self._extract_gender(page_data)
+            # Default to male if not explicitly female (most common in Vietnamese football)
+            if gender == 'unknown':
+                gender = 'male'
+            infobox_data['gender'] = gender
+            logger.debug(f"  → {title}: Gender = {gender}")
+        
         # Create entity
         entity = {
             'name': title,
@@ -286,6 +343,119 @@ class VNFootballGraphBuilder:
         
         # Extract relationships
         self._extract_relationships(entity, infobox, infobox_data)
+    
+    def _extract_career_status(self, page_data: Dict) -> str:
+        """
+        Extract career status from page data.
+        
+        Returns:
+            str: 'active', 'retired', or 'unknown'
+        """
+        first_para = page_data.get('first_paragraph', '').lower()
+        infobox_text = page_data.get('infobox_text', '').lower()
+        
+        # Retired indicators
+        retired_keywords = [
+            'cựu cầu thủ', 'cựu tuyển thủ', 'cựu danh thủ',
+            'đã giải nghệ', 'treo giày', 'giải nghệ năm',
+            'kết thúc sự nghiệp', 'nghỉ thi đấu',
+            'từng thi đấu', 'từng khoác áo',
+            'former player', 'retired', 'former footballer'
+        ]
+        
+        # Active indicators
+        active_keywords = [
+            'đang thi đấu', 'đang khoác áo', 'hiện đang',
+            'hiện tại thi đấu', 'currently plays', 'plays for'
+        ]
+        
+        # Check for retired
+        if any(keyword in first_para for keyword in retired_keywords):
+            return 'retired'
+        
+        # Check for active
+        if any(keyword in first_para for keyword in active_keywords):
+            return 'active'
+        
+        # Check infobox for current team
+        if 'đội hiện nay' in infobox_text or 'current team' in infobox_text:
+            return 'active'
+        
+        return 'unknown'
+    
+    def _extract_retirement_year(self, page_data: Dict) -> str:
+        """
+        Extract retirement year if available.
+        
+        Returns:
+            str or None: Year of retirement
+        """
+        import re
+        
+        first_para = page_data.get('first_paragraph', '')
+        infobox_text = page_data.get('infobox_text', '')
+        
+        text = first_para + ' ' + infobox_text
+        
+        # Pattern: "giải nghệ năm 2020", "retired in 2020"
+        patterns = [
+            r'giải nghệ năm (\d{4})',
+            r'treo giày năm (\d{4})',
+            r'retired in (\d{4})',
+            r'kết thúc sự nghiệp năm (\d{4})'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, text.lower())
+            if match:
+                return match.group(1)
+        
+        return None
+    
+    def _extract_gender(self, page_data: Dict) -> str:
+        """
+        Extract gender from page data.
+        
+        Returns:
+            str: 'male', 'female', or 'unknown'
+        """
+        title = page_data.get('title', '').lower()
+        first_para = page_data.get('first_paragraph', '').lower()
+        infobox_text = page_data.get('infobox_text', '').lower()
+        categories = [c.lower() for c in page_data.get('categories', [])]
+        
+        # Combine all text
+        text = title + ' ' + first_para + ' ' + infobox_text + ' ' + ' '.join(categories)
+        
+        # Female indicators
+        female_keywords = [
+            'cầu thủ nữ', 'tuyển thủ nữ', 'danh thủ nữ',
+            'huấn luyện viên nữ', 'hlv nữ',
+            'bóng đá nữ', 'đội tuyển nữ',
+            'women\'s football', 'women\'s soccer', 'women footballer',
+            'female player', 'female footballer', 'female coach',
+            'women\'s national team', 'women\'s team',
+            'ladies football', 'ladies team',
+            'she is', 'she was', 'she plays', 'her career'
+        ]
+        
+        # Male indicators (less explicit, mostly default)
+        male_keywords = [
+            'he is', 'he was', 'he plays', 'his career',
+            'anh là', 'ông là'
+        ]
+        
+        # Check for female
+        if any(keyword in text for keyword in female_keywords):
+            return 'female'
+        
+        # Check for male
+        if any(keyword in text for keyword in male_keywords):
+            return 'male'
+        
+        # Default: assume male for Vietnamese football (most common)
+        # But mark as unknown if not explicitly stated
+        return 'unknown'
     
     def _extract_relationships(self, entity: Dict, infobox, infobox_data: Dict):
         """Extract relationships from entity data."""

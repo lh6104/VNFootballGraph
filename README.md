@@ -302,25 +302,87 @@ neo4j-admin import \
 
 ## 🔧 Configuration
 
-### Smart Filtering
+### Advanced Multi-Layer Filtering System
 
-Edit `src/config.py` to customize filtering strategy:
+The project now uses a **relevance scoring system** with multi-signal evaluation:
+
+#### 🎯 Relevance Scoring
+
+Pages are scored based on multiple signals:
 
 ```python
-# DROP keywords - Skip these pages
-DROP_KEYWORDS = [
-    "phim", "xã", "huyện", "bóng rổ", "cầu lông"
-]
+RELEVANCE_WEIGHTS = {
+    "keyword_match": 3,           # INCLUDE keywords found
+    "infobox_valid": 3,            # Valid football infobox
+    "category_valid": 3,           # Valid Wikipedia categories
+    "contextual_text": 3,          # Semantic patterns in text
+    "linked_by_core": 1,           # Linked from core nodes
+    "blacklist_hit": -4,           # Noise/meta pages
+    "file_page": -5,               # Media files
+    "exclude_keyword_hit": -3,     # EXCLUDE keywords found
+}
+```
 
-# PRIORITY keywords - Always keep
-PRIORITY_KEYWORDS = [
-    "v.league 1", "đội tuyển bóng đá quốc gia việt nam"
-]
+#### 📊 Layer System
 
-# KEEP keywords - Keep if match
-KEEP_KEYWORDS = [
-    "bóng đá", "cầu thủ", "clb", "đội tuyển"
+Based on score, pages are assigned to layers:
+
+- **CORE** (score ≥ 5): High-quality entities (players, coaches, clubs) → **Expand links**
+- **CONTEXT** (score ≥ 2): Relevant but secondary (stadiums, tournaments) → **Keep but don't expand**
+- **SKIP** (score < 2): Irrelevant pages → **Discard**
+
+#### 🧠 Semantic Patterns
+
+Detects football context even without keywords:
+
+```python
+SEMANTIC_PATTERNS = [
+    r"là cầu thủ bóng đá",
+    r"là huấn luyện viên bóng đá",
+    r"thi đấu cho",
+    r"đội tuyển quốc gia",
+    # ... 20+ patterns
 ]
+```
+
+#### ⚙️ Filter Toggles
+
+Enable/disable specific filters:
+
+```python
+ACTIVE_FILTERS = {
+    "keyword_filter": True,        # Keyword matching
+    "semantic_filter": True,       # Pattern matching
+    "category_filter": True,       # Category validation
+    "infobox_filter": True,        # Infobox validation
+    "neighbor_filter": True,       # Graph-based quality
+    "graph_filter": True,          # Distance/degree metrics
+    "ner_filter": False,           # NER (requires underthesea)
+}
+```
+
+#### 📝 Usage
+
+```python
+from src.crawl import WikiCrawler
+
+# With advanced filtering (default)
+crawler = WikiCrawler(max_depth=15, use_advanced_filter=True)
+
+# Without advanced filtering (legacy mode)
+crawler = WikiCrawler(max_depth=15, use_advanced_filter=False)
+```
+
+#### 🧪 Testing
+
+```bash
+# Test all filters
+conda run -n datamining python scripts/test_advanced_filtering.py --all
+
+# Test specific components
+python scripts/test_advanced_filtering.py --scoring
+python scripts/test_advanced_filtering.py --semantic
+python scripts/test_advanced_filtering.py --config
 ```
 
 ### Vietnamese Diaspora Keywords

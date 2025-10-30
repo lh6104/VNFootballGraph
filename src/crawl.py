@@ -11,6 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from . import config
+from .filters_advanced import AdvancedFilter
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +19,13 @@ logger = logging.getLogger(__name__)
 class WikiCrawler:
     """Crawls Vietnamese Wikipedia pages with depth control."""
     
-    def __init__(self, max_depth: int = config.DEFAULT_MAX_DEPTH):
+    def __init__(self, max_depth: int = config.DEFAULT_MAX_DEPTH, use_advanced_filter: bool = True):
         """
         Initialize the crawler.
         
         Args:
             max_depth: Maximum depth to crawl from seed page
+            use_advanced_filter: Use advanced relevance scoring filter
         """
         self.max_depth = max_depth
         self.visited: Set[str] = set()
@@ -32,6 +34,12 @@ class WikiCrawler:
         self.session.headers.update({
             'User-Agent': config.USER_AGENT
         })
+        
+        # Advanced filtering
+        self.use_advanced_filter = use_advanced_filter
+        self.advanced_filter = AdvancedFilter() if use_advanced_filter else None
+        self.node_layers = {}  # Track node layers: {page_title: "core"|"context"|"skip"}
+        self.node_scores = {}  # Track relevance scores: {page_title: score}
         
     def crawl(self, seed_page: str):
         """
@@ -45,6 +53,12 @@ class WikiCrawler:
             Dict: Page data dictionary for each crawled page
         """
         logger.info(f"Starting crawl from seed: {seed_page}, max_depth: {self.max_depth}")
+        
+        # Mark seed page as CORE to ensure it's always processed
+        if self.use_advanced_filter:
+            self.node_layers[seed_page] = "core"
+            self.advanced_filter.core_nodes.add(seed_page)
+            logger.info(f"Seed page '{seed_page}' marked as CORE (always process)")
         
         queue = [(seed_page, 0)]  # (page_title, depth)
         current_depth = 0
@@ -84,7 +98,15 @@ class WikiCrawler:
                 links = page_data.get('links', [])
                 
                 # Add linked pages to queue if within depth limit
-                if depth < self.max_depth:
+                # With advanced filter: only expand from "core" layer nodes
+                should_expand = True
+                if self.use_advanced_filter and page_title in self.node_layers:
+                    layer = self.node_layers[page_title]
+                    should_expand = self.advanced_filter.should_expand_links(layer)
+                    if not should_expand:
+                        logger.debug(f"Not expanding links from {page_title} (layer={layer})")
+                
+                if depth < self.max_depth and should_expand:
                     for link in links:
                         if link not in self.visited:
                             queue.append((link, depth + 1))
@@ -153,6 +175,39 @@ class WikiCrawler:
             if infobox:
                 infobox_text = infobox.get_text()
             
+            # Advanced filtering: Evaluate page relevance
+            relevance_score = 0
+            layer = "context"  # Default layer
+            
+            if self.use_advanced_filter:
+                # Check if already marked as CORE (e.g., seed page)
+                if page_title in self.node_layers:
+                    layer = self.node_layers[page_title]
+                    relevance_score = 10  # High score for pre-marked pages
+                    logger.debug(f"Page {page_title} already marked as {layer}")
+                else:
+                    infobox_type = self.advanced_filter.get_infobox_type(infobox)
+                    neighbors = [self.page_tree.get(page_title, "")]  # Parent page
+                    
+                    relevance_score, layer = self.advanced_filter.evaluate_page(
+                        title=page_title,
+                        text=first_para,
+                        categories=categories,
+                        infobox_type=infobox_type,
+                        infobox=infobox,
+                        neighbors=neighbors,
+                        distance_from_seed=0  # TODO: Calculate actual distance
+                    )
+                    
+                    # Store layer and score
+                    self.node_layers[page_title] = layer
+                    self.node_scores[page_title] = relevance_score
+                
+                # Skip if layer is "skip" (but not for pre-marked pages)
+                if layer == "skip":
+                    logger.info(f"Skipping {page_title}: relevance score too low ({relevance_score})")
+                    return None
+            
             # Build page data WITHOUT storing html/soup (memory efficient)
             page_data = {
                 'title': page_title,
@@ -162,6 +217,8 @@ class WikiCrawler:
                 'categories': categories,
                 'first_paragraph': first_para,  # For entity detection
                 'infobox_text': infobox_text,   # For entity detection
+                'relevance_score': relevance_score,  # Advanced filtering score
+                'layer': layer,  # Node layer (core/context/skip)
             }
             
             # soup and response.text are now garbage collected
@@ -276,7 +333,14 @@ class WikiCrawler:
     
     def _should_skip_link(self, page_title: str) -> bool:
         """
-        Check if a link should be skipped using smart filtering strategy.
+        Check if a link should be skipped using enhanced multi-tier filtering strategy.
+        
+        Strategy:
+        1. SKIP_PREFIXES: Immediate skip (Wikipedia meta pages, media files)
+        2. PRIORITY_KEYWORDS: Never skip (high-value pages)
+        3. EXCLUDE_KEYWORDS: Skip if found (irrelevant topics)
+        4. INCLUDE_KEYWORDS: Keep if found (relevant topics)
+        5. Default: Skip if no INCLUDE keyword (conservative)
         
         Args:
             page_title: Wikipedia page title
@@ -284,42 +348,70 @@ class WikiCrawler:
         Returns:
             True if link should be skipped
         """
-        # Check skip prefixes (highest priority)
+        # TIER 1: Check skip prefixes (highest priority - media files, meta pages)
         for prefix in config.SKIP_PREFIXES:
             if page_title.startswith(prefix):
+                logger.debug(f"⛔ Skipping {page_title}: matches SKIP_PREFIX '{prefix}'")
                 return True
         
+        # Normalize page title for keyword matching
         page_lower = page_title.lower().replace('_', ' ')
         
-        # Check DROP keywords - skip if found
-        for keyword in config.DROP_KEYWORDS:
-            if keyword in page_lower:
-                logger.debug(f"Skipping {page_title}: contains DROP keyword '{keyword}'")
-                return True
-        
-        # Check skip URL keywords
-        for keyword in config.SKIP_URL_KEYWORDS:
-            if keyword in page_lower:
-                return True
-        
-        # Check PRIORITY keywords - never skip
+        # TIER 2: Check PRIORITY keywords - never skip these (highest value)
         for keyword in config.PRIORITY_KEYWORDS:
             if keyword in page_lower:
-                logger.debug(f"Keeping {page_title}: contains PRIORITY keyword '{keyword}'")
+                logger.debug(f"⭐ Keeping {page_title}: contains PRIORITY keyword '{keyword}'")
                 return False
         
-        # Check KEEP keywords - keep if found
-        for keyword in config.KEEP_KEYWORDS:
+        # TIER 3: Check EXCLUDE keywords - skip if found (irrelevant topics)
+        # Use scoring to avoid false positives (e.g., "Lịch sử câu lạc bộ" should not be skipped)
+        exclude_score = 0
+        exclude_matches = []
+        for keyword in config.EXCLUDE_KEYWORDS:
             if keyword in page_lower:
+                exclude_score += 1
+                exclude_matches.append(keyword)
+        
+        # TIER 4: Check INCLUDE keywords - keep if found (relevant topics)
+        include_score = 0
+        include_matches = []
+        for keyword in config.INCLUDE_KEYWORDS:
+            if keyword in page_lower:
+                include_score += 1
+                include_matches.append(keyword)
+        
+        # TIER 5: Check skip URL keywords (disambiguation pages)
+        for keyword in config.SKIP_URL_KEYWORDS:
+            if keyword in page_lower:
+                logger.debug(f"⛔ Skipping {page_title}: contains SKIP_URL keyword '{keyword}'")
+                return True
+        
+        # Decision logic: Compare INCLUDE vs EXCLUDE scores
+        # If INCLUDE score > EXCLUDE score: Keep (relevant)
+        # If EXCLUDE score > INCLUDE score: Skip (irrelevant)
+        # If tied or no matches: Use conservative approach (skip)
+        
+        if include_score > 0 and exclude_score > 0:
+            # Both found - compare scores
+            if include_score > exclude_score:
+                logger.debug(f"✅ Keeping {page_title}: INCLUDE({include_score}) > EXCLUDE({exclude_score})")
                 return False
-        
-        # If no KEEP keyword found, skip (conservative approach)
-        # Comment this out if you want to crawl everything not in DROP list
-        # logger.debug(f"Skipping {page_title}: no KEEP keyword found")
-        # return True
-        
-        # Default: don't skip (liberal approach)
-        return False
+            else:
+                logger.debug(f"⛔ Skipping {page_title}: EXCLUDE({exclude_score}) >= INCLUDE({include_score})")
+                return True
+        elif include_score > 0:
+            # Only INCLUDE keywords found - keep
+            logger.debug(f"✅ Keeping {page_title}: contains INCLUDE keywords {include_matches[:3]}")
+            return False
+        elif exclude_score > 0:
+            # Only EXCLUDE keywords found - skip
+            logger.debug(f"⛔ Skipping {page_title}: contains EXCLUDE keywords {exclude_matches[:3]}")
+            return True
+        else:
+            # No keywords found - conservative approach: skip
+            # This prevents crawling completely irrelevant pages
+            logger.debug(f"⚠️  Skipping {page_title}: no INCLUDE/EXCLUDE keywords found (conservative)")
+            return True
     
     def get_page_type(self, page_data: Dict) -> Optional[str]:
         """
@@ -331,7 +423,7 @@ class WikiCrawler:
         Returns:
             Entity type ('player', 'coach', 'club', 'national_team') or None
         """
-        title = page_data.get('title', '').lower()
+        title = page_data.get('title', '').lower().replace('_', ' ')  # Normalize underscores
         categories = [c.lower() for c in page_data.get('categories', [])]
         
         # Get infobox text (now pre-extracted)
@@ -343,21 +435,99 @@ class WikiCrawler:
         # Combine all text sources for keyword matching
         text = title + ' ' + ' '.join(categories) + ' ' + infobox_text + ' ' + first_para
         
+        # EXCLUSION RULES - Skip non-person pages
+        
+        # 1. Skip pure position pages (e.g., "Tiền_đạo_(bóng_đá)")
+        # These have position name + "(bóng_đá)" pattern
+        if "_(bóng_đá)" in page_data.get('title', ''):
+            position_terms = ["tiền_vệ", "tiền_đạo", "hậu_vệ", "thủ_môn", "trung_vệ"]
+            if any(pos in page_data.get('title', '').lower() for pos in position_terms):
+                logger.debug(f"Skipping position concept page: {title}")
+                return None
+        
+        # 2. Skip organizations/institutions/tournaments
+        org_indicators = [
+            "trung_tâm", "trung tâm", "center", "academy",
+            "quỹ", "fund", "foundation",
+            "giải_thưởng", "giải thưởng", "award", "prize",
+            "chiếc_giày", "golden boot", "golden ball"
+        ]
+        if any(org in title for org in org_indicators):
+            logger.debug(f"Skipping organization/award page: {title}")
+            return None
+        
+        # 2b. Skip tournaments/competitions
+        tournament_indicators = [
+            "giải bóng đá", "giải vô địch", "giải u-", "giải u21", "giải u23",
+            "vòng loại", "vòng chung kết", "vòng bảng",
+            "cup", "championship", "tournament",
+            "aff cup", "sea games", "asian games",
+            "world cup", "fifa"
+        ]
+        # Exception: Don't skip if it's a person name with tournament in disambiguation
+        # e.g., "Nguyễn_Văn_A_(cầu_thủ_tại_World_Cup_2022)"
+        has_person_name_tournament = any(name_part in title for name_part in ["nguyễn", "trần", "lê", "phạm", "hoàng", "phan", "vũ", "đặng", "bùi", "đỗ", "hồ", "cao"])
+        
+        if any(tournament in title for tournament in tournament_indicators) and not has_person_name_tournament:
+            logger.debug(f"Skipping tournament/competition page: {title}")
+            return None
+        
+        # 3. Skip position pages (general check)
+        position_indicators = [
+            "tiền vệ", "tiền đạo", "hậu vệ", "thủ môn",
+            "midfielder", "forward", "striker", "defender", "goalkeeper",
+            "vị trí", "position"
+        ]
+        # Exception: If it's a person page with position in name (e.g., "Bùi_Tiến_Dũng_(thủ_môn)")
+        # Check if it has person name pattern (Vietnamese name + disambiguation)
+        has_person_name = any(name_part in title for name_part in ["nguyễn", "trần", "lê", "phạm", "hoàng", "phan", "vũ", "đặng", "bùi", "đỗ", "hồ", "cao"])
+        has_disambiguation = '(' in page_data.get('title', '') and ')' in page_data.get('title', '')
+        is_person_with_position = has_person_name and has_disambiguation
+        
+        if any(pos in title for pos in position_indicators) and not is_person_with_position:
+            logger.debug(f"Skipping position page: {title}")
+            return None
+        
+        # Skip team/club pages when checking for individuals
+        team_indicators = ["đội tuyển", "national team", "câu lạc bộ", "football club"]
+        if any(team in title for team in team_indicators):
+            # This is a team/club, not a person
+            if "câu lạc bộ" in title or "football club" in title:
+                return 'club'
+            elif "đội tuyển" in title or "national team" in title:
+                return 'national_team'
+            return None
+        
+        # PERSON DETECTION - Must have biographical indicators
+        person_indicators = [
+            # Vietnamese
+            "sinh năm", "sinh ngày", "sinh tại", "sinh ra",
+            "là cầu thủ", "là huấn luyện viên", "là một cầu thủ", "là một huấn luyện viên",
+            "người việt nam", "người hàn quốc", "người pháp", "người nhật",
+            # English
+            "born", "born in", "born on",
+            "is a player", "is a footballer", "is a coach", "is a manager",
+            "football player", "football coach", "football manager",
+            "soccer player", "soccer coach",
+            "vietnamese", "korean", "french", "japanese", "thai"
+        ]
+        is_person = any(indicator in first_para for indicator in person_indicators)
+        
+        if not is_person:
+            # Not a person page, might be concept/position/tournament
+            logger.debug(f"Not a person page: {title}")
+            return None
+        
+        # Now check specific types for PERSON pages only
         # Check for player
         if any(keyword in text for keyword in config.PLAYER_KEYWORDS):
-            return 'player'
+            # Additional validation: should NOT be a coach
+            if "huấn luyện viên" not in first_para and "coach" not in first_para:
+                return 'player'
         
         # Check for coach
         if any(keyword in text for keyword in config.COACH_KEYWORDS):
             return 'coach'
-        
-        # Check for club
-        if any(keyword in text for keyword in config.CLUB_KEYWORDS):
-            return 'club'
-        
-        # Check for national team
-        if any(keyword in text for keyword in config.NATIONAL_TEAM_KEYWORDS):
-            return 'national_team'
         
         return None
     
